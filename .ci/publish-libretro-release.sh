@@ -20,21 +20,53 @@ core_ext="${core_filename##*.}"
 asset="${core_stem}-${release_slug}.${core_ext}.zip"
 
 rm -f "$asset"
-zip -j -9 "$asset" "$core_path"
+
+create_zip() {
+    archive="$1"
+    input_file="$2"
+
+    if command -v zip >/dev/null 2>&1; then
+        zip -j -9 "$archive" "$input_file"
+    elif command -v 7z >/dev/null 2>&1; then
+        7z a -tzip -mx=9 "$archive" "$input_file"
+    elif command -v 7z.exe >/dev/null 2>&1; then
+        7z.exe a -tzip -mx=9 "$archive" "$input_file"
+    elif command -v powershell.exe >/dev/null 2>&1 \
+          && command -v cygpath >/dev/null 2>&1; then
+        archive_win="$(cygpath -w "$archive")"
+        input_win="$(cygpath -w "$input_file")"
+        powershell.exe -NoProfile -NonInteractive -Command \
+            "Compress-Archive -LiteralPath '$input_win' -DestinationPath '$archive_win' -CompressionLevel Optimal -Force"
+    else
+        echo "no ZIP creation tool is available" >&2
+        return 127
+    fi
+}
+
+create_zip "$asset" "$core_path"
 
 if [[ -z "${GITHUB_REF_NAME:-}" || -z "${GITHUB_REPOSITORY:-}" || -z "${GH_TOKEN:-}" ]]; then
     echo "GitHub release environment is not available" >&2
     exit 1
 fi
 
-if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-    gh release upload "$GITHUB_REF_NAME" "$asset" \
+if command -v gh >/dev/null 2>&1; then
+    gh_command=gh
+elif command -v gh.exe >/dev/null 2>&1; then
+    gh_command=gh.exe
+else
+    echo "GitHub CLI is not available" >&2
+    exit 127
+fi
+
+if "$gh_command" release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+    "$gh_command" release upload "$GITHUB_REF_NAME" "$asset" \
         --repo "$GITHUB_REPOSITORY" --clobber
 else
-    gh release create "$GITHUB_REF_NAME" "$asset" \
+    "$gh_command" release create "$GITHUB_REF_NAME" "$asset" \
         --repo "$GITHUB_REPOSITORY" \
         --title "Play! Libretro $GITHUB_REF_NAME" \
         --generate-notes \
-    || gh release upload "$GITHUB_REF_NAME" "$asset" \
+    || "$gh_command" release upload "$GITHUB_REF_NAME" "$asset" \
         --repo "$GITHUB_REPOSITORY" --clobber
 fi
