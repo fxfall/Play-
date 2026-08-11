@@ -1,6 +1,8 @@
 name: Build macOS
 
 on: [push, pull_request]
+permissions:
+  contents: write
 jobs:
   build_macos:
     runs-on: macos-latest
@@ -81,6 +83,13 @@ jobs:
       with:
         name: Play_MacOS_libretro
         path: build/Source/ui_libretro/Release/play_libretro.dylib
+    - name: Publish libretro Release assets
+      if: ${{ startsWith(github.ref, 'refs/tags/') }}
+      run: |
+        ./.ci/publish-libretro-release.sh apple-osx-arm64 build/Source/ui_libretro/Release/play_libretro.dylib
+        ./.ci/publish-libretro-release.sh apple-osx-x86_64 build/Source/ui_libretro/Release/play_libretro.dylib
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Upload to S3
       if: ${{ env.AWS_ACCESS_KEY_ID != null}}
       run: |
@@ -91,4 +100,3 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION: 'us-east-2'
-

@@ -1,6 +1,8 @@
 name: Build Android
 
 on: [push, pull_request]
+permissions:
+  contents: write
 env:
   ANDROID_BUILD_TOOLS_VERSION: '34.0.0'
   ANDROID_NDK_VERSION: '25.2.9519653'
@@ -86,6 +88,17 @@ jobs:
       with:
         name: Play_Android_libretro
         path: build_retro/play_libretro_*_android.so
+    - name: Publish libretro Release assets
+      if: ${{ startsWith(github.ref, 'refs/tags/') && matrix.build-type == 'libretro' }}
+      run: |
+        for core_path in build_retro/play_libretro_*_android.so; do
+          core_filename="$(basename "$core_path")"
+          abi="${core_filename#play_libretro_}"
+          abi="${abi%_android.so}"
+          ./.ci/publish-libretro-release.sh "android-${abi}" "$core_path"
+        done
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Upload APKs/AAB to S3
       if: ${{ matrix.build-type == 'apk' && env.AWS_ACCESS_KEY_ID != null}}
       run: |

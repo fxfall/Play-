@@ -1,6 +1,8 @@
 name: Build Windows
 
 on: [push, pull_request]
+permissions:
+  contents: write
 env:
   VULKAN_SDK_VERSION: '1.3.296.0'
   QT_VERSION: '5.15.2'
@@ -111,6 +113,12 @@ jobs:
       with:
         name: Play_Windows_${{ matrix.target-platform }}_libretro
         path: build\Source\ui_libretro\Release\play_libretro.dll
+    - name: Publish libretro Release asset
+      if: ${{ startsWith(github.ref, 'refs/tags/') && matrix.has-debugger == 'false' }}
+      shell: bash
+      run: ./.ci/publish-libretro-release.sh windows-${{ matrix.arch-type }} build/Source/ui_libretro/Release/play_libretro.dll
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Upload to S3
       if: ${{ env.AWS_ACCESS_KEY_ID != null && matrix.has-debugger == 'false' }}
       run: |
