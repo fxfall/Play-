@@ -46,6 +46,9 @@ jobs:
         cd installer_ios
         ./build_ipa.sh
     - name: Generate Cydia Package
+      # Cydia packaging is optional for the libretro artifact. A packaging
+      # toolchain failure must not discard the already-built core.
+      continue-on-error: true
       run: |
         cd installer_ios
         ./build_cydia.sh
