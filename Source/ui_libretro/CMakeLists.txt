@@ -35,6 +35,8 @@ endif()
 list(INSERT UI_LIBRETRO_PROJECT_LIBS 0 gsh_opengl)
 
 set(SRC
+	LibretroVfsStream.cpp
+	LibretroVfsStream.h
 	main_libretro.cpp
 	GSH_OpenGL_Libretro.cpp
 	GSH_OpenGL_Libretro.h

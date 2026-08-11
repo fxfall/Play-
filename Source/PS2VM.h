@@ -3,6 +3,7 @@
 #include <thread>
 #include <future>
 #include "filesystem_def.h"
+#include "StreamFactory.h"
 #include "Types.h"
 #include "MIPS.h"
 #include "MailBox.h"
@@ -67,6 +68,7 @@ public:
 
 	void CDROM0_SyncPath();
 	void CDROM0_Reset();
+	void SetStreamFactory(Framework::StreamFactory);
 
 	void SetEeFrequencyScale(uint32, uint32);
 	void ReloadFrameRateLimit();
@@ -206,4 +208,6 @@ private:
 	CPS2OS::RequestLoadExecutableEvent::Connection m_OnRequestLoadExecutableConnection;
 	Framework::CSignal<void()>::Connection m_OnExecutableChangeConnection;
 	Framework::CSignal<void()>::Connection m_OnCrtModeChangeConnection;
+
+	Framework::StreamFactory m_streamFactory;
 };

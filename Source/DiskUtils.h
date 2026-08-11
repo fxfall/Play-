@@ -5,6 +5,7 @@
 #include <set>
 #include "filesystem_def.h"
 #include "OpticalMedia.h"
+#include "StreamFactory.h"
 
 namespace DiskUtils
 {
@@ -14,7 +15,7 @@ namespace DiskUtils
 
 	const ExtensionList& GetSupportedExtensions();
 
-	OpticalMediaPtr CreateOpticalMediaFromPath(const fs::path&, uint32 = 0);
+	OpticalMediaPtr CreateOpticalMediaFromPath(const fs::path&, uint32 = 0, const Framework::StreamFactory& = {});
 	SystemConfigMap ParseSystemConfigFile(Framework::CStream*);
 
 	bool TryGetDiskId(const fs::path&, std::string*);

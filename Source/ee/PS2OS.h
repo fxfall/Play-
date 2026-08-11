@@ -3,6 +3,7 @@
 #include <string>
 #include <memory>
 #include "filesystem_def.h"
+#include "../StreamFactory.h"
 #include "signal/Signal.h"
 #include "../ELF.h"
 #include "../MIPS.h"
@@ -35,6 +36,7 @@ public:
 	bool IsIdle() const;
 
 	void BootFromFile(const fs::path&);
+	void SetStreamFactory(Framework::StreamFactory);
 	void BootFromVirtualPath(const char*, const ArgumentList&);
 	void BootFromCDROM();
 	CELF32* GetELF();
@@ -471,6 +473,7 @@ private:
 	DmacHandlerQueue m_dmacHandlerQueue;
 
 	ArgumentList m_currentArguments;
+	Framework::StreamFactory m_streamFactory;
 
 	//For display purposes only
 	std::string m_executableName;

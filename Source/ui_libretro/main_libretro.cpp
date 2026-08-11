@@ -9,16 +9,21 @@
 #include "GSH_OpenGL_Libretro.h"
 #include "SH_LibreAudio.h"
 #include "PH_Libretro_Input.h"
+#include "LibretroVfsStream.h"
 
 #include "PathUtils.h"
 #include "PtrStream.h"
 #include "MemStream.h"
+#include "StdStream.h"
+#include "StdStreamUtils.h"
 
 #include "filesystem_def.h"
 #include "DefaultAppConfig.h"
 
 #include <vector>
 #include <cstdlib>
+#include <exception>
+#include <memory>
 
 #define LOG_NAME "LIBRETRO"
 
@@ -31,6 +36,7 @@ retro_environment_t g_environ_cb;
 retro_input_poll_t g_input_poll_cb;
 retro_input_state_t g_input_state_cb;
 retro_audio_sample_batch_t g_set_audio_sample_batch_cb;
+retro_vfs_interface* g_vfs_interface = nullptr;
 
 std::map<int, int> g_ds2_to_retro_btn_map;
 struct retro_hw_render_callback g_hw_render
@@ -68,6 +74,32 @@ struct LastOpenCommand
 };
 
 LastOpenCommand m_bootCommand;
+
+static std::string GetLibretroVfsPath(const fs::path& path)
+{
+	auto result = path.generic_string();
+	if(result.find('/') == std::string::npos)
+	{
+		result = "./" + result;
+	}
+	return result;
+}
+
+static std::unique_ptr<Framework::CStream> CreateLibretroStream(const fs::path& path)
+{
+	if(g_vfs_interface)
+	{
+		try
+		{
+			return std::make_unique<CLibretroVfsStream>(g_vfs_interface, GetLibretroVfsPath(path));
+		}
+		catch(const std::exception&)
+		{
+			// Keep native-path loading available for frontends with a partial VFS implementation.
+		}
+	}
+	return std::make_unique<Framework::CStdStream>(path.native().c_str(), Framework::GetInputStdStreamMode<fs::path::string_type>());
+}
 
 unsigned retro_api_version()
 {
@@ -202,6 +234,15 @@ void retro_set_video_refresh(retro_video_refresh_t cb)
 void retro_set_environment(retro_environment_t cb)
 {
 	g_environ_cb = cb;
+	if(g_environ_cb)
+	{
+		retro_vfs_interface_info vfs_info = {};
+		vfs_info.required_interface_version = 1;
+		if(g_environ_cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_info) && vfs_info.iface)
+		{
+			g_vfs_interface = vfs_info.iface;
+		}
+	}
 }
 
 void retro_set_input_poll(retro_input_poll_t cb)
@@ -478,6 +519,10 @@ void retro_reset(void)
 bool retro_load_game(const retro_game_info* info)
 {
 	CLog::GetInstance().Print(LOG_NAME, "%s\n", __FUNCTION__);
+	if(!info || !info->path || !*info->path)
+	{
+		return false;
+	}
 
 #if defined(IOS)
 	bool can_jit = false;
@@ -502,6 +547,19 @@ bool retro_load_game(const retro_game_info* info)
 		m_bootCommand = LastOpenCommand(BootType::CD, filePath);
 		CAppConfig::GetInstance().SetPreferencePath(PREF_PS2_CDROM0_PATH, filePath);
 		CAppConfig::GetInstance().Save();
+		if(g_vfs_interface)
+		{
+			m_virtualMachine->SetStreamFactory(CreateLibretroStream);
+		}
+		else
+		{
+			m_virtualMachine->CDROM0_SyncPath();
+		}
+		if(!m_virtualMachine->m_cdrom0)
+		{
+			CLog::GetInstance().Print(LOG_NAME, "%s\n", "Failed to mount cdrom0 content.");
+			return false;
+		}
 	}
 	first_run = false;
 
@@ -555,6 +613,9 @@ void retro_init()
 		libretro_supports_bitmasks = true;
 
 	CAppConfig::GetInstance().RegisterPreferenceInteger(PREF_AUDIO_SPUBLOCKCOUNT, 22);
+	/* Libretro supplies the disc path with each content load. Do not reuse a
+	 * path saved by a previous frontend session before ROMX VFS activation. */
+	CAppConfig::GetInstance().SetPreferencePath(PREF_PS2_CDROM0_PATH, fs::path());
 
 	m_virtualMachine = new CPS2VM();
 	m_virtualMachine->Initialize();
@@ -593,5 +654,6 @@ void retro_deinit()
 		delete m_virtualMachine;
 		m_virtualMachine = nullptr;
 	}
+	g_vfs_interface = nullptr;
 	libretro_supports_bitmasks = false;
 }

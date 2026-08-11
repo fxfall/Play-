@@ -2,6 +2,7 @@
 #include <exception>
 #include <memory>
 #include <climits>
+#include <utility>
 #include <fenv.h>
 #include "FpUtils.h"
 #include "make_unique.h"
@@ -821,7 +822,7 @@ void CPS2VM::CDROM0_SyncPath()
 	{
 		try
 		{
-			m_cdrom0 = DiskUtils::CreateOpticalMediaFromPath(path);
+			m_cdrom0 = DiskUtils::CreateOpticalMediaFromPath(path, 0, m_streamFactory);
 			SetIopOpticalMedia(m_cdrom0.get());
 		}
 		catch(const std::exception& Exception)
@@ -829,6 +830,17 @@ void CPS2VM::CDROM0_SyncPath()
 			printf("PS2VM: Error mounting cdrom0 device: %s\r\n", Exception.what());
 		}
 	}
+}
+
+void CPS2VM::SetStreamFactory(Framework::StreamFactory streamFactory)
+{
+	m_mailBox.SendCall(
+	    [this, streamFactory = std::move(streamFactory)]() mutable {
+		    m_streamFactory = std::move(streamFactory);
+		    m_ee->m_os->SetStreamFactory(m_streamFactory);
+		    CDROM0_SyncPath();
+	    },
+	    true);
 }
 
 void CPS2VM::CDROM0_Reset()

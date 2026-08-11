@@ -34,8 +34,13 @@
 #include "TargetConditionals.h"
 #endif
 
-static std::unique_ptr<Framework::CStream> CreateImageStream(const fs::path& imagePath)
+static std::unique_ptr<Framework::CStream> CreateImageStream(const fs::path& imagePath, const Framework::StreamFactory& streamFactory)
 {
+	if(streamFactory)
+	{
+		return streamFactory(imagePath);
+	}
+
 	static const auto s3ImagePathPrefix = fs::path("//s3/").native();
 	auto imagePathString = imagePath.native();
 	if(imagePathString.find(s3ImagePathPrefix) == 0)
@@ -72,10 +77,10 @@ static std::unique_ptr<Framework::CStream> CreateImageStream(const fs::path& ima
 #endif
 }
 
-static DiskUtils::OpticalMediaPtr CreateOpticalMediaFromCueSheet(const fs::path& imagePath)
+static DiskUtils::OpticalMediaPtr CreateOpticalMediaFromCueSheet(const fs::path& imagePath, const Framework::StreamFactory& streamFactory)
 {
 	auto currentPath = imagePath.parent_path();
-	auto imageStream = std::unique_ptr<Framework::CStream>(CreateImageStream(imagePath));
+	auto imageStream = std::unique_ptr<Framework::CStream>(CreateImageStream(imagePath, streamFactory));
 	CCueSheet cueSheet(*imageStream);
 	struct TRACK
 	{
@@ -94,7 +99,7 @@ static DiskUtils::OpticalMediaPtr CreateOpticalMediaFromCueSheet(const fs::path&
 				throw std::runtime_error(string_format("Unsupported FILE type: %s.", fileCommand->filetype.c_str()));
 			}
 			auto filePath = currentPath / fileCommand->filename;
-			currentStream = std::shared_ptr<Framework::CStream>(CreateImageStream(filePath));
+			currentStream = std::shared_ptr<Framework::CStream>(CreateImageStream(filePath, streamFactory));
 			currentTrackIndex = -1;
 		}
 		else if(auto trackCommand = dynamic_cast<CCueSheet::COMMAND_TRACK*>(command.get()))
@@ -169,22 +174,22 @@ static DiskUtils::OpticalMediaPtr CreateOpticalMediaFromCueSheet(const fs::path&
 	return result;
 }
 
-static DiskUtils::OpticalMediaPtr CreateOpticalMediaFromMds(const fs::path& imagePath)
+static DiskUtils::OpticalMediaPtr CreateOpticalMediaFromMds(const fs::path& imagePath, const Framework::StreamFactory& streamFactory)
 {
-	auto imageStream = std::unique_ptr<Framework::CStream>(CreateImageStream(imagePath));
+	auto imageStream = std::unique_ptr<Framework::CStream>(CreateImageStream(imagePath, streamFactory));
 	auto discImage = CMdsDiscImage(*imageStream);
 
 	//Create image data path
 	auto imageDataPath = imagePath;
 	imageDataPath.replace_extension("mdf");
-	auto imageDataStream = std::shared_ptr<Framework::CStream>(CreateImageStream(imageDataPath));
+	auto imageDataStream = std::shared_ptr<Framework::CStream>(CreateImageStream(imageDataPath, streamFactory));
 
 	return COpticalMedia::CreateDvd(imageDataStream, discImage.IsDualLayer(), discImage.GetLayerBreak());
 }
 
-static DiskUtils::OpticalMediaPtr CreateOpticalMediaFromChd(const fs::path& imagePath)
+static DiskUtils::OpticalMediaPtr CreateOpticalMediaFromChd(const fs::path& imagePath, const Framework::StreamFactory& streamFactory)
 {
-	auto imageStream = std::make_shared<CChdCdImageStream>(CreateImageStream(imagePath));
+	auto imageStream = std::make_shared<CChdCdImageStream>(CreateImageStream(imagePath, streamFactory));
 	auto trackInfo = [&imageStream]() -> std::pair<COpticalMedia::BlockProviderPtr, COpticalMedia::MEDIA_BLOCK_TYPE> {
 		static constexpr uint64 CHD_CD_UNITSIZE = 2448;
 		static constexpr uint64 CD_MEDIA_UNIT_SIZE = COpticalMedia::MEDIA_BLOCK_SIZE_2352;
@@ -233,7 +238,7 @@ const DiskUtils::ExtensionList& DiskUtils::GetSupportedExtensions()
 	return extensionList;
 }
 
-DiskUtils::OpticalMediaPtr DiskUtils::CreateOpticalMediaFromPath(const fs::path& imagePath, uint32 opticalMediaCreateFlags)
+DiskUtils::OpticalMediaPtr DiskUtils::CreateOpticalMediaFromPath(const fs::path& imagePath, uint32 opticalMediaCreateFlags, const Framework::StreamFactory& streamFactory)
 {
 	assert(!imagePath.empty());
 
@@ -243,23 +248,23 @@ DiskUtils::OpticalMediaPtr DiskUtils::CreateOpticalMediaFromPath(const fs::path&
 	//Gotta think of something better than that...
 	if(!stricmp(extension.c_str(), ".isz"))
 	{
-		stream = std::make_shared<CIszImageStream>(CreateImageStream(imagePath));
+		stream = std::make_shared<CIszImageStream>(CreateImageStream(imagePath, streamFactory));
 	}
 	else if(!stricmp(extension.c_str(), ".chd"))
 	{
-		return CreateOpticalMediaFromChd(imagePath);
+		return CreateOpticalMediaFromChd(imagePath, streamFactory);
 	}
 	else if(!stricmp(extension.c_str(), ".cso"))
 	{
-		stream = std::make_shared<CCsoImageStream>(CreateImageStream(imagePath));
+		stream = std::make_shared<CCsoImageStream>(CreateImageStream(imagePath, streamFactory));
 	}
 	else if(!stricmp(extension.c_str(), ".cue"))
 	{
-		return CreateOpticalMediaFromCueSheet(imagePath);
+		return CreateOpticalMediaFromCueSheet(imagePath, streamFactory);
 	}
 	else if(!stricmp(extension.c_str(), ".mds"))
 	{
-		return CreateOpticalMediaFromMds(imagePath);
+		return CreateOpticalMediaFromMds(imagePath, streamFactory);
 	}
 #ifdef _WIN32
 	else if(imagePath.string()[0] == '\\')
@@ -284,7 +289,7 @@ DiskUtils::OpticalMediaPtr DiskUtils::CreateOpticalMediaFromPath(const fs::path&
 	//If it's null after all that, just feed it to a StdStream
 	if(!stream)
 	{
-		stream = std::shared_ptr<Framework::CStream>(CreateImageStream(imagePath));
+		stream = std::shared_ptr<Framework::CStream>(CreateImageStream(imagePath, streamFactory));
 	}
 
 	return COpticalMedia::CreateAuto(stream, opticalMediaCreateFlags);

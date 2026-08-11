@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <exception>
+#include <utility>
 #include "string_format.h"
 #include "PS2OS.h"
 #include "StdStream.h"
@@ -281,6 +282,11 @@ void CPS2OS::Release()
 	UnloadExecutable();
 }
 
+void CPS2OS::SetStreamFactory(Framework::StreamFactory streamFactory)
+{
+	m_streamFactory = std::move(streamFactory);
+}
+
 bool CPS2OS::IsIdle() const
 {
 	return m_ee.CanGenerateInterrupt() &&
@@ -290,6 +296,10 @@ bool CPS2OS::IsIdle() const
 void CPS2OS::BootFromFile(const fs::path& execPath)
 {
 	auto stream = [&]() -> std::unique_ptr<Framework::CStream> {
+		if(m_streamFactory)
+		{
+			return m_streamFactory(execPath);
+		}
 #ifdef __ANDROID__
 		if(Framework::Android::CContentUtils::IsContentPath(execPath))
 		{
