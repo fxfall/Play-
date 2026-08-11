@@ -28,9 +28,11 @@ create_zip() {
     if command -v zip >/dev/null 2>&1; then
         zip -j -9 "$archive" "$input_file"
     elif command -v 7z >/dev/null 2>&1; then
-        7z a -tzip -mx=9 "$archive" "$input_file"
+        archive_abs="$(cd "$(dirname "$archive")" && pwd)/$(basename "$archive")"
+        (cd "$(dirname "$input_file")" && 7z a -tzip -mx=9 "$archive_abs" "$(basename "$input_file")")
     elif command -v 7z.exe >/dev/null 2>&1; then
-        7z.exe a -tzip -mx=9 "$archive" "$input_file"
+        archive_abs="$(cd "$(dirname "$archive")" && pwd)/$(basename "$archive")"
+        (cd "$(dirname "$input_file")" && 7z.exe a -tzip -mx=9 "$archive_abs" "$(basename "$input_file")")
     elif command -v powershell.exe >/dev/null 2>&1 \
           && command -v cygpath >/dev/null 2>&1; then
         archive_win="$(cygpath -w "$archive")"
