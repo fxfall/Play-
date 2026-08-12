@@ -20,7 +20,15 @@ jobs:
         distribution: 'adopt'
         java-version: '17'
     - name: Install NDK
-      run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;${{ env.ANDROID_NDK_VERSION }}"
+      run: |
+        for attempt in 1 2 3; do
+          if "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;${{ env.ANDROID_NDK_VERSION }}"; then
+            exit 0
+          fi
+          echo "NDK installation attempt $attempt failed; retrying..."
+          sleep 15
+        done
+        exit 1
     - name: Install CMake
       run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "cmake;${{ env.ANDROID_CMAKE_VERSION }}"
     - name: Checkout
